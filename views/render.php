@@ -6,7 +6,7 @@
         <?php if ($html && isset($source)): ?>
             <a href="javascript:;" class="btn-black" id="toggle">Toggle source</a>
         <?php endif ?>
-        <?php if ($use_pastebin): ?>
+        <?php if (isset($use_pastebin) && $use_pastebin): ?>
             <a href="javascript:;" class="btn-black" id="create-pastebin" title="Create public Paste on PasteBin">Create public Paste</a>
         <?php endif; ?>
     </div>
@@ -36,13 +36,18 @@
                 </a>
             </li>
         <?php endforeach ?>
+        
+        <li class="breadcrumb-item">
+              <i class="fas fa-clock"></i> <?=($time??'')?>
+        </li>
+        
       </ol>
     </nav>
 
 </div>
 
 <?php if ($html): ?>
-    <?php if ($use_pastebin): ?>
+    <?php if (isset($use_pastebin) && $use_pastebin): ?>
     <div id="pastebin-notification" class="alert" style="display:none;"></div>
     <?php endif; ?>
     <div id="render">
@@ -51,7 +56,7 @@
     <script>
         $('#render pre').addClass('prettyprint linenums');
         prettyPrint();
-
+        
         $('#render a[href^="#"]').click(function(event) {
             event.preventDefault();
             document.location.hash = $(this).attr('href').replace('#', '');
@@ -64,17 +69,20 @@
     <div id="pastebin-notification" class="alert" style="display:none;"></div>
     <?php endif; ?>
     <div id="source">
-        <?php if (ENABLE_EDITING): ?>
+        <?php if (ENABLE_EDITING && ifCanManage()): ?>
             <div class="alert alert-info">
-                <i class="glyphicon glyphicon-pencil"></i> <strong>Editing is enabled</strong>. Use the "Save changes" button below the editor to commit modifications to this file.
+                <i class="fa fa-pencil-alt"></i> <strong>Editing is enabled</strong>. Use the "Save changes" button below the editor to commit modifications to this file.
             </div>
         <?php endif ?>
 
         <form method="POST" action="<?php echo BASE_URL . "/?a=edit" ?>">
+            <?php if (ENABLE_EDITING && ifCanManage()): ?>
+                    <input type="submit" class="btn btn-warning btn-sm" id="submit-edits" value="Save Changes">
+            <?php endif ?>
             <input type="hidden" name="ref" value="<?php echo base64_encode($page['file']) ?>">
             <textarea id="editor" name="source" class="form-control" rows="<?php echo substr_count($source, "\n") + 1; ?>"><?php echo $source; ?></textarea>
 
-            <?php if (ENABLE_EDITING): ?>
+            <?php if (ENABLE_EDITING && ifCanManage()): ?>
                 <div class="form-actions">
                     <input type="submit" class="btn btn-warning btn-sm" id="submit-edits" value="Save Changes">
                 </div>
@@ -116,8 +124,7 @@
         if (typeof modes[extension] != 'undefined') {
             mode = modes[extension];
         }
-
-        var editor = CodeMirror.fromTextArea(document.getElementById('editor'), {
+        var codeConfig = {
             lineNumbers: true,
             lineWrapping: true,
             <?php if (USE_DARK_THEME): ?>
@@ -129,8 +136,9 @@
             <?php if (!ENABLE_EDITING): ?>
             ,readOnly: true
             <?php endif ?>
-        });
-
+        };
+        var editor = CodeMirror.fromTextArea(document.getElementById('editor'), codeConfig);
+        
         $('#toggle').click(function (event) {
             event.preventDefault();
             $('#render').toggle();

@@ -5,7 +5,12 @@ if (!defined('APP_STARTED')) {
 
 class Wiki
 {
+    //不同后缀对应的处理器 对应renderers中的文件
     protected $_renderers = array(
+        'go' => 'showcode',
+        'c' => 'showcode',
+        'js' => 'showcode',
+        'json' => 'showcode',
         'md' => 'Markdown',
         'markdown' => 'Markdown',
         'mdown' => 'Markdown',
@@ -45,11 +50,11 @@ class Wiki
     {
         $fullPath = LIBRARY . DIRECTORY_SEPARATOR . $page;
         $path = realpath(LIBRARY . DIRECTORY_SEPARATOR . $page);
-        $parts = explode('/', $page);
+        $parts = explode('/', trim($page,'/'));
 
         $not_found = function () use ($page) {
             $page = htmlspecialchars($page, ENT_QUOTES);
-            throw new Exception("Page '$page' was not found");
+            throw new Exception("Page '$page' was not found.");
         };
 
         if (!$this->_pathIsSafe($fullPath)) {
@@ -64,7 +69,7 @@ class Wiki
             }
 
             if (file_exists($path . DIRECTORY_SEPARATOR . 'index.md')) {
-                return $this->_render('index.md');
+                return $this->_render(implode('/', $parts) . DIRECTORY_SEPARATOR . 'index.md');
             }
 
             // Get a printable version of the actual folder name:
@@ -108,6 +113,7 @@ class Wiki
             if (false === $extension || false === $this->_getRenderer($extension)) {
                 $not_found();
             } elseif (!file_exists($fullPath)) {
+                
                 // Pass this to the render view, cleverly disguised as just
                 // another page, so we can make use of the tree, breadcrumb,
                 // etc.
@@ -119,12 +125,12 @@ class Wiki
                     'parts'     => $parts,
                     'page'      => $page_data,
                     'html'      =>
-                          "<h3>Page '$_page' not found</h3>"
+                          "<h3>Page '$_page' not found.</h3>"
                         . "<br/>"
-                        . "<form method='GET'>"
+                        . (ifCanManage() ? "<form method='GET'>"
                         . "<input type='hidden' name='a' value='create'>"
                         . "<input type='submit' class='btn btn-primary' value='Create this page' />"
-                        . "</form>"
+                        . "</form>" : '')
                     ,
                     'is_dir'    => false
                 ));
@@ -135,7 +141,7 @@ class Wiki
 
         $finfo = finfo_open(FILEINFO_MIME);
         $mime_type = trim(finfo_file($finfo, $path));
-        if (substr($mime_type, 0, strlen('text/plain')) != 'text/plain'
+        if (substr($mime_type, 0, strlen('text')) != 'text'
             && substr($mime_type, 0, strlen('inode/x-empty')) != 'inode/x-empty'
         ) {
             // not an ASCII file, send it directly to the browser
@@ -149,6 +155,8 @@ class Wiki
         }
 
         $source = file_get_contents($path);
+        // File edited time
+        $time = filemtime($path);
         $extension = pathinfo($path, PATHINFO_EXTENSION);
         $renderer = $this->_getRenderer($extension);
         $page_data = $this->_default_page_data;
@@ -167,15 +175,24 @@ class Wiki
             $html = $renderer($source);
         }
         if ($renderer && $renderer == 'Markdown') {
-            $html = \Wikitten\MarkdownExtra::defaultTransform($source);
+            // 换markdown引擎
+            $html = \tp_Markdown\Markdown::convert($source);
+            // $html = \Wikitten\MarkdownExtra::defaultTransform($source);
+        }
+        //默认的代码展示方法
+        if (false === $html){
+            require_once __DIR__ . DIRECTORY_SEPARATOR . 'renderers' . DIRECTORY_SEPARATOR . "showcode.php";
+            $html = showcode($source, $extension);
         }
 
         if (empty(trim($html))) {
             $html = "<h1>This page is empty</h1>\n";
             $source = $parts[0];
         }
-
+        $page_data['title'] = $parts[count($parts) - 1];
         $this->_view('render', array(
+            'time' => date('Y-m-d H:i:s',$time),
+            //'isMarkdown' => isset($isMarkdown)?true:false,
             'html' => $html,
             'source' => $source,
             'extension' => $extension,
@@ -395,19 +412,19 @@ class Wiki
     {
         $request = parse_url($_SERVER['REQUEST_URI']);
         $page = str_replace("###" . APP_DIR . "/", "", "###" . urldecode($request['path']));
-
+        
         if (!$page) {
             if (file_exists(LIBRARY . DIRECTORY_SEPARATOR . DEFAULT_FILE)) {
                 $this->_render(DEFAULT_FILE);
                 return;
             }
-
+            
             $this->_view('index', array(
                 'page' => $this->_default_page_data
             ));
             return;
         }
-
+        
         try {
             $this->_render($page);
         } catch (Exception $e) {
@@ -427,7 +444,7 @@ class Wiki
         // NOTE: $_POST['source'] may be empty if the user just deletes
         // everything, but it should always be set.
         if (!ENABLE_EDITING || $_SERVER['REQUEST_METHOD'] != 'POST'
-            || empty($_POST['ref']) || !isset($_POST['source'])
+            || empty($_POST['ref']) || !isset($_POST['source']) || !ifCanManage()
         ) {
             $this->_404();
         }
@@ -468,7 +485,7 @@ class Wiki
      */
     public function createPasteBinAction()
     {
-        if (!$this->_usePasteBin()) {
+        if (!$this->_usePasteBin() || !ifCanManage()) {
             $this->_404();
         }
 
@@ -527,24 +544,36 @@ class Wiki
 
     public function createAction()
     {
-        $request    = parse_url($_SERVER['REQUEST_URI']);
-        $page       = str_replace("###" . APP_DIR . "/", "", "###" . urldecode($request['path']));
-
-        $filepath   = LIBRARY . urldecode($request['path']);
-        $content    = "# " . htmlspecialchars($page, ENT_QUOTES, 'UTF-8');
-        // if feature not enabled, go to 404
-        if (!ENABLE_EDITING || file_exists($filepath)) {
+        if (!ifCanManage()) {
             $this->_404();
         }
-
+        $request    = parse_url($_SERVER['REQUEST_URI']);
+        //过滤wiki当前目录
+        if(defined('APP_ROOT') && '/' !== APP_ROOT){
+            $requestPath = urldecode(str_replace(APP_ROOT, '', $request['path']));
+        }else{
+            $requestPath = urldecode($request['path']);
+        }
+        //页面标题
+        $title = trim($requestPath, "\//");
+        //文档路径
+        $filepath   = LIBRARY . $requestPath;
+        //默认内容
+        $content    = "## " . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . "\n\n```\ncode here\n```";
+        // if feature not enabled, go to 404
+        if (!ENABLE_EDITING || file_exists($filepath)) {
+            $this->_404($filepath);
+        }
         // Create subdirectory recursively, if neccessary
-        mkdir(dirname($filepath), 0755, true);
+        if(!file_exists(dirname($filepath))){
+            mkdir(dirname($filepath), 0755, true);
+        }
 
         // Save default content, and redirect back to the new page
         file_put_contents($filepath, $content);
         if (file_exists($filepath)) {
             // Redirect to new page
-            $redirect_url = BASE_URL . "/$page";
+            $redirect_url = BASE_URL . $requestPath;
             header("HTTP/1.0 302 Found", true);
             header("Location: $redirect_url");
 

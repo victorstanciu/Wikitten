@@ -15,9 +15,7 @@ class Login
      */
     public function __construct()
     {
-        session_start();
-
-        if ($_GET['action'] === 'logout') {
+        if (isset($_GET['action']) && $_GET['action'] === 'logout') {
             $this->doLogout();
 
             header("location: " . BASE_URL);
@@ -29,8 +27,14 @@ class Login
      * Check if the user is logged
      * @return boolean
      */
-    private function isLogged()
+    public static function isLogged()
     {
+        if (isset($_COOKIE['token']) && $_COOKIE['token'] === md5(ACCESS_USER.ACCESS_PASSWORD)){
+            return true;
+        }
+        if (empty($_SESSION['ACCESS_USER']) || empty($_SESSION['ACCESS_PASSWORD'])) {
+            return false;
+        }
         if ($_SESSION['ACCESS_USER'] !== ACCESS_USER || $_SESSION['ACCESS_PASSWORD'] !== ACCESS_PASSWORD) {
             return false;
         }
@@ -57,7 +61,7 @@ class Login
 
         $_SESSION['ACCESS_USER'] = $username;
         $_SESSION['ACCESS_PASSWORD'] = $password;
-
+        setcookie("token",md5(ACCESS_USER.ACCESS_PASSWORD), time()+3600*24*31);
         return true;
     }
 
@@ -69,7 +73,7 @@ class Login
     {
         $_SESSION['ACCESS_USER'] = '';
         $_SESSION['ACCESS_PASSWORD'] = '';
-
+        setcookie("token",'', time()-1);
         return true;
     }
 

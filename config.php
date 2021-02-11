@@ -8,18 +8,16 @@ if (!defined('APP_STARTED')) {
 // first rename it to `config.php`.
 
 // Custom name for your wiki:
-define('APP_NAME', 'My Wiki');
+define('APP_NAME', '魔力之所wiki');
 
 // You can install in a dir
-define('APP_ROOT', 'Wikitten');
+// define('APP_ROOT', '');
 
 // Set the filename of the automatic homepage here
-// 默认首页文件
-define('DEFAULT_FILE', 'moozik.md');
+define('DEFAULT_FILE', '魔力之所.md');
 
 // Custom path to your wiki's library:
-// markdown文件目录
-define('LIBRARY', './library');
+define('LIBRARY', __DIR__ . DIRECTORY_SEPARATOR . 'library');
 
 // Enable editing files through the interface?
 // NOTE: There's currently no authentication built into Wikitten, controlling
@@ -33,20 +31,17 @@ define('ENABLE_EDITING', true);
 define('USE_DARK_THEME', true);
 
 // Disable the Wikitten logo here
-// 建议关掉，花里胡哨
-define('USE_WIKITTEN_LOGO', true);
+define('USE_WIKITTEN_LOGO', false);
 
-// 这东西国内用不了
 // Enable PasteBin plugin ?
 // define('ENABLE_PASTEBIN', true);
-// define('PASTEBIN_API_KEY', '76c7756d24fe6d5204b81a3c8c4a055f');
+// define('PASTEBIN_API_KEY', '');
 
 // Enable password authentication (leave this field commented to disable password)
 define('ACCESS_USER', 'user');
 define('ACCESS_PASSWORD', 'pass');
 
 //view page without login
-//所有人可以看到
 define('ALLOW_EVERYONE_VIEW', true);
 
 // Use this as default target for external urls
